@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VideoFrame Studio - 高清视频截图与帧标注工具</title>
+  <meta name="description" content="纯前端高清视频截图神器，支持逐帧快照、定时批量截图、胶片连环画生成、画笔与文字标注及 ZIP 打包下载。">
+  
+  <!-- CSS Stylesheet -->
+  <link rel="stylesheet" href="css/styles.css">
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- JSZip Library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+<body>
+
+  <!-- App Top Header -->
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-icon">
+        <i data-lucide="aperture"></i>
+      </div>
+      <div class="brand-title">VideoFrame Studio</div>
+      <span class="brand-badge">PRO v2.0</span>
+    </div>
+
+    <div class="header-actions">
+      <button class="btn btn-secondary btn-sm" id="btnLoadSample" title="加载内置测试视频">
+        <i data-lucide="play-circle"></i> 载入范例视频
+      </button>
+      <label class="btn btn-primary btn-sm">
+        <i data-lucide="upload"></i> 打开本地视频
+        <input type="file" id="videoFileInput" accept="video/*" style="display: none;">
+      </label>
+      <button class="btn btn-secondary btn-icon" id="btnShortcuts" title="快捷键说明">
+        <i data-lucide="keyboard"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- App Main Workspace Layout -->
+  <main class="app-container">
+    
+    <!-- Left Section: Video Stage & Controls -->
+    <section class="studio-section">
+      
+      <!-- Video Stage Container -->
+      <div class="video-stage" id="videoStage">
+        <!-- HTML5 Video Player -->
+        <video id="videoPlayer" crossorigin="anonymous" preload="auto" playsinline></video>
+        
+        <!-- Dropzone Overlay -->
+        <div class="dropzone" id="dropzone">
+          <div class="dropzone-icon">
+            <i data-lucide="film" size="36"></i>
+          </div>
+          <div class="dropzone-title">拖拽视频文件至此，或点击选择</div>
+          <div class="dropzone-sub">支持 MP4, WebM, MOV, OGG, MKV 等所有浏览器支持的视频格式。本地纯前端处理，零隐私泄露。</div>
+          <button class="btn btn-primary" id="btnChooseVideo">
+            <i data-lucide="folder-open"></i> 选择视频文件
+          </button>
+        </div>
+      </div>
+
+      <!-- Control Panel -->
+      <div class="control-panel">
+        
+        <!-- Timeline Bar & Timestamp Display -->
+        <div class="timeline-box">
+          <button class="btn btn-secondary btn-icon btn-sm" id="btnPlayPause" title="播放 / 暂停 (Space)">
+            <i data-lucide="play" id="iconPlayPause"></i>
+          </button>
+
+          <div class="timeline-slider-wrapper">
+            <input type="range" id="timelineSlider" class="timeline-slider" min="0" max="100" step="0.001" value="0">
+          </div>
+
+          <div class="timestamp-display" id="timeDisplay">
+            00:00:00.000 / 00:00:00.000
+          </div>
+        </div>
+
+        <!-- Fine Stepping & Playback Options Toolbar -->
+        <div class="control-bar">
+          
+          <!-- Stepper Buttons -->
+          <div class="btn-group">
+            <button class="btn btn-secondary btn-sm" id="btnStepBack10" title="后退 10 秒">
+              <i data-lucide="chevrons-left"></i> -10s
+            </button>
+            <button class="btn btn-secondary btn-sm" id="btnStepBack1" title="后退 1 秒">
+              <i data-lucide="chevron-left"></i> -1s
+            </button>
+            <button class="btn btn-secondary btn-sm" id="btnStepFramePrev" title="上一帧 (←)">
+              <i data-lucide="skip-back"></i> 前 1 帧
+            </button>
+            <button class="btn btn-secondary btn-sm" id="btnStepFrameNext" title="下一帧 (→)">
+              后 1 帧 <i data-lucide="skip-forward"></i>
+            </button>
+            <button class="btn btn-secondary btn-sm" id="btnStepFwd1" title="前进 1 秒">
+              +1s <i data-lucide="chevron-right"></i>
+            </button>
+            <button class="btn btn-secondary btn-sm" id="btnStepFwd10" title="前进 10 秒">
+              +10s <i data-lucide="chevrons-right"></i>
+            </button>
+          </div>
+
+          <!-- Options Dropdowns (Speed & FPS) -->
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <select class="select-custom" id="selectFps" title="设置视频帧率 (默认 30 FPS)">
+              <option value="24">24 FPS (电影)</option>
+              <option value="25">25 FPS (PAL)</option>
+              <option value="30" selected>30 FPS (标准)</option>
+              <option value="60">60 FPS (高帧率)</option>
+            </select>
+
+            <select class="select-custom" id="selectSpeed" title="播放倍速">
+              <option value="0.25">0.25x 倍速</option>
+              <option value="0.5">0.5x 倍速</option>
+              <option value="1" selected>1.0x 正常</option>
+              <option value="1.5">1.5x 倍速</option>
+              <option value="2">2.0x 倍速</option>
+              <option value="4">4.0x 倍速</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Main Action Buttons -->
+        <div class="capture-toolbar">
+          <button class="btn btn-primary" id="btnCaptureCurrent">
+            <i data-lucide="camera"></i> 单帧截图 [S]
+          </button>
+
+          <button class="btn btn-accent" id="btnOpenAnnotator">
+            <i data-lucide="edit-3"></i> 标注与剪裁
+          </button>
+
+          <button class="btn btn-amber" id="btnOpenBatchModal">
+            <i data-lucide="layers"></i> 批量定时截图 [B]
+          </button>
+
+          <button class="btn btn-secondary" id="btnOpenFilmstripModal">
+            <i data-lucide="layout-grid"></i> 生成电影胶片
+          </button>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Right Section: Sidebar Gallery Panel -->
+    <aside class="gallery-section">
+      <div class="gallery-header">
+        <div class="gallery-title">
+          <i data-lucide="images"></i> 截图画廊
+          <span class="gallery-badge" id="galleryCount">0</span>
+        </div>
+        <div style="display: flex; gap: 6px;">
+          <button class="btn btn-secondary btn-sm" id="btnExportZip" title="打包下载所有截图 ZIP">
+            <i data-lucide="download"></i> 下载 ZIP
+          </button>
+          <button class="btn btn-danger btn-sm" id="btnClearGallery" title="清空所有截图">
+            <i data-lucide="trash-2"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Gallery Grid Container -->
+      <div class="gallery-content" id="galleryContainer">
+        <div class="gallery-empty" id="galleryEmpty">
+          <i data-lucide="image-off" size="48"></i>
+          <p>暂无截图记录</p>
+          <span style="font-size: 0.75rem;">播放视频并按下 <b>[S]</b> 或点击<b>单帧截图</b>保存画面</span>
+        </div>
+      </div>
+    </aside>
+
+  </main>
+
+  <!-- MODAL: Batch Capture Options -->
+  <div class="modal-overlay" id="modalBatch">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div class="modal-title">
+          <i data-lucide="layers" style="color: var(--accent-amber);"></i> 批量/定时帧提取
+        </div>
+        <button class="modal-close" data-close="modalBatch"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">提取模式</label>
+          <select class="form-select" id="batchModeSelect">
+            <option value="interval">固定时间间隔 (例如每 X 秒截取一张)</option>
+            <option value="count">固定截图总张数 (均匀分布全片)</option>
+          </select>
+        </div>
+
+        <div class="form-group" id="groupBatchInterval">
+          <label class="form-label">时间间隔 (秒)</label>
+          <input type="number" class="form-input" id="batchIntervalInput" value="2" min="0.1" step="0.5">
+        </div>
+
+        <div class="form-group" id="groupBatchCount" style="display: none;">
+          <label class="form-label">总截图张数</label>
+          <input type="number" class="form-input" id="batchCountInput" value="10" min="2" max="100">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">提取范围</label>
+          <div style="display: flex; gap: 10px;">
+            <input type="number" class="form-input" id="batchStartTime" placeholder="开始时间 (秒)" value="0" min="0" step="0.1">
+            <input type="number" class="form-input" id="batchEndTime" placeholder="结束时间 (秒)" value="" min="0" step="0.1">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="batchTimestampCheck" checked>
+            右下角印上记录时间戳水印 (00:01:23.456)
+          </label>
+        </div>
+
+        <!-- Progress Indicator -->
+        <div id="batchProgressBox" style="display: none; margin-top: 10px;">
+          <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 6px;">
+            <span id="batchProgressStatus">正在提取帧...</span>
+            <span id="batchProgressPercent">0%</span>
+          </div>
+          <div style="background: rgba(0,0,0,0.1); height: 8px; border-radius: 4px; overflow: hidden;">
+            <div id="batchProgressBar" style="width: 0%; height: 100%; background: var(--accent-amber); transition: width 0.1s;"></div>
+          </div>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-close="modalBatch">取消</button>
+        <button class="btn btn-amber" id="btnStartBatch">开始批量提取</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Filmstrip / Contact Sheet Generator -->
+  <div class="modal-overlay" id="modalFilmstrip">
+    <div class="modal-box modal-large">
+      <div class="modal-header">
+        <div class="modal-title">
+          <i data-lucide="layout-grid" style="color: var(--primary);"></i> 电影胶片 / 九宫格连环画拼图生成
+        </div>
+        <button class="modal-close" data-close="modalFilmstrip"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body" style="display: grid; grid-template-columns: 260px 1fr; gap: 20px;">
+        
+        <!-- Controls Sidebar -->
+        <div style="display: flex; flex-direction: column; gap: 16px;">
+          <div class="form-group">
+            <label class="form-label">列数 (Columns)</label>
+            <select class="form-select" id="filmCols">
+              <option value="2">2 列 (更宽清晰)</option>
+              <option value="3" selected>3 列 (经典九宫格)</option>
+              <option value="4">4 列 (密细排列)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">行数 / 总帧数 (Rows)</label>
+            <select class="form-select" id="filmRows">
+              <option value="2">2 行 (共 4 帧)</option>
+              <option value="3" selected>3 行 (共 9 帧)</option>
+              <option value="4">4 行 (共 16 帧)</option>
+              <option value="5">5 行 (共 20 帧)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="filmTimeCheck" checked>
+              显示时间戳角标
+            </label>
+          </div>
+
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="filmHeaderCheck" checked>
+              包含顶部视频元数据标题
+            </label>
+          </div>
+
+          <button class="btn btn-primary" id="btnGenerateFilmstrip">
+            <i data-lucide="refresh-cw"></i> 重新生成胶片
+          </button>
+        </div>
+
+        <!-- Preview Area -->
+        <div style="background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: var(--radius-md); overflow: auto; display: flex; align-items: center; justify-content: center; padding: 12px;" id="filmstripPreviewContainer">
+          <span class="text-muted">点击“重新生成胶片”生成高清连环画</span>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-close="modalFilmstrip">关闭</button>
+        <button class="btn btn-accent" id="btnDownloadFilmstrip" disabled>
+          <i data-lucide="download"></i> 下载拼图图片
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Canvas Annotator & Editor -->
+  <div class="modal-overlay" id="modalAnnotator">
+    <div class="modal-box modal-large">
+      <div class="modal-header">
+        <div class="modal-title">
+          <i data-lucide="edit-3" style="color: var(--accent-cyan);"></i> 画面标注与剪裁编辑器
+        </div>
+        <button class="modal-close" data-close="modalAnnotator"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body">
+        
+        <div class="editor-workspace">
+          <!-- Annotation Tools Bar -->
+          <div class="editor-toolbar">
+            <button class="editor-tool-btn active" data-tool="brush" title="画笔"><i data-lucide="pen-tool"></i></button>
+            <button class="editor-tool-btn" data-tool="arrow" title="箭头"><i data-lucide="arrow-up-right"></i></button>
+            <button class="editor-tool-btn" data-tool="rect" title="矩形框"><i data-lucide="square"></i></button>
+            <button class="editor-tool-btn" data-tool="circle" title="圆形框"><i data-lucide="circle"></i></button>
+            <button class="editor-tool-btn" data-tool="text" title="添加文字"><i data-lucide="type"></i></button>
+            <button class="editor-tool-btn" data-tool="mosaic" title="马赛克 / 模糊敏感区"><i data-lucide="grid"></i></button>
+            
+            <div style="width: 1px; height: 24px; background: rgba(0,0,0,0.1); margin: 0 4px;"></div>
+
+            <!-- Color Swatches -->
+            <div style="display: flex; gap: 6px; align-items: center;">
+              <div class="color-picker-dot active" style="background: #ef4444;" data-color="#ef4444"></div>
+              <div class="color-picker-dot" style="background: #f59e0b;" data-color="#f59e0b"></div>
+              <div class="color-picker-dot" style="background: #10b981;" data-color="#10b981"></div>
+              <div class="color-picker-dot" style="background: #06b6d4;" data-color="#06b6d4"></div>
+              <div class="color-picker-dot" style="background: #ffffff;" data-color="#ffffff"></div>
+              <div class="color-picker-dot" style="background: #000000;" data-color="#000000"></div>
+            </div>
+
+            <div style="width: 1px; height: 24px; background: rgba(0,0,0,0.1); margin: 0 4px;"></div>
+
+            <!-- Size Selector -->
+            <label style="font-size: 0.75rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
+              粗细: <input type="range" id="editorLineWidth" min="2" max="20" value="4" style="width: 80px;">
+            </label>
+
+            <div style="margin-left: auto; display: flex; gap: 6px;">
+              <button class="btn btn-secondary btn-sm" id="btnEditorUndo" title="撤销上一笔"><i data-lucide="undo-2"></i> 撤销</button>
+              <button class="btn btn-danger btn-sm" id="btnEditorClear" title="清空所有标注"><i data-lucide="rotate-ccw"></i> 重置</button>
+            </div>
+          </div>
+
+          <!-- Canvas Container -->
+          <div class="canvas-container">
+            <canvas id="annotationCanvas"></canvas>
+          </div>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-close="modalAnnotator">取消</button>
+        <button class="btn btn-secondary" id="btnEditorCopy">
+          <i data-lucide="copy"></i> 复制到剪贴板
+        </button>
+        <button class="btn btn-primary" id="btnEditorSaveGallery">
+          <i data-lucide="check"></i> 保存至画廊并下载
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Preview / Zoom View -->
+  <div class="modal-overlay" id="modalPreview">
+    <div class="modal-box modal-large">
+      <div class="modal-header">
+        <div class="modal-title" id="previewModalTitle">
+          <i data-lucide="eye"></i> 截图详情预览
+        </div>
+        <button class="modal-close" data-close="modalPreview"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body" style="align-items: center; justify-content: center; background: #000;">
+        <img id="previewImage" src="" alt="Snapshot Preview" style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: var(--radius-md);">
+      </div>
+      <div class="modal-footer" style="justify-content: space-between;">
+        <div style="font-size: 0.8rem; color: var(--text-muted);" id="previewMetaText">
+          分辨率: 1920x1080 | 时间戳: 00:01:23.456
+        </div>
+        <div style="display: flex; gap: 10px;">
+          <button class="btn btn-secondary" id="btnPreviewCopy"><i data-lucide="copy"></i> 复制图片</button>
+          <button class="btn btn-primary" id="btnPreviewDownload"><i data-lucide="download"></i> 下载图片</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Keyboard Shortcuts -->
+  <div class="modal-overlay" id="modalShortcuts">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div class="modal-title">
+          <i data-lucide="keyboard" style="color: var(--accent-cyan);"></i> 快捷键指南
+        </div>
+        <button class="modal-close" data-close="modalShortcuts"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body">
+        <table class="shortcut-table">
+          <tr><td><kbd>Space</kbd></td><td>播放 / 暂停视频</td></tr>
+          <tr><td><kbd>S</kbd> 或 <kbd>C</kbd></td><td>立即抓取当前帧原画质截图</td></tr>
+          <tr><td><kbd>←</kbd> / <kbd>→</kbd></td><td>精确微调移动 1 帧 (根据当前 FPS)</td></tr>
+          <tr><td><kbd>Shift</kbd> + <kbd>←</kbd> / <kbd>→</kbd></td><td>快退 / 快进 1 秒</td></tr>
+          <tr><td><kbd>B</kbd></td><td>打开批量定时截图弹窗</td></tr>
+          <tr><td><kbd>Ctrl</kbd> + <kbd>V</kbd> / 拖拽</td><td>加载本地视频文件</td></tr>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" data-close="modalShortcuts">我知道了</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Scripts -->
+  <script src="js/annotator.js"></script>
+  <script src="js/capture.js"></script>
+  <script src="js/gallery.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    // Initialize Lucide Icons
+    lucide.createIcons();
+  </script>
+</body>
+</html>
